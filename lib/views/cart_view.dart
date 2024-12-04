@@ -60,13 +60,29 @@ class CartView extends StatelessWidget {
                       leading: Image.network(book.cover),
                       title: Text(book.title),
                       subtitle: Text(
-                        "Quantité : $quantity\nPrix unitaire : ${book.price.toStringAsFixed(2)} €\nTotal : ${totalPriceForBook.toStringAsFixed(2)} €",
+                        "Prix unitaire : ${book.price.toStringAsFixed(2)} €\nTotal : ${totalPriceForBook.toStringAsFixed(2)} €",
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle),
-                        onPressed: () {
-                          cartCubit.removeFromCart(book);
-                        },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Bouton pour retirer un livre
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: () {
+                              context.read<CartCubit>().removeFromCart(book);
+                            },
+                          ),
+                          Text(
+                            "$quantity",
+                          ),
+                          // Bouton pour ajouter un livre
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: () {
+                              context.read<CartCubit>().addToCart(book);
+                            },
+                          ),
+                        ],
                       ),
                     );
                   }).toList(),
@@ -95,7 +111,7 @@ class CartView extends StatelessWidget {
                       bool isBestOffer = priceAfterOffer == bestPrice;
 
                       return Opacity(
-                        opacity: isBestOffer ? 1.0 : 0.5, // Meilleure offre sans opacité réduite
+                        opacity: isBestOffer ? 1.0 : 0.5,
                         child: ListTile(
                           title: Text(
                             _offerDescription(offer),
