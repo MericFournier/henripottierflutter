@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
 import '../Cubits/cart_cubit.dart';
 import '../Models/Book.dart';
-import '../Models/offer.dart';
 
 class CartView extends StatelessWidget {
   const CartView({super.key});
@@ -12,7 +10,7 @@ class CartView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Panier"),
+        title: const Text('Panier'),
       ),
       body: BlocBuilder<CartCubit, Map<Book, int>>(
         builder: (context, cart) {
@@ -23,162 +21,141 @@ class CartView extends StatelessWidget {
           }
 
           final cartCubit = context.read<CartCubit>();
-          final totalWithoutDiscount = cart.entries
-              .map((entry) => entry.key.price * entry.value)
-              .reduce((value, element) => value + element);
+          final totalPrice = cartCubit.getTotalPrice();
 
-          // Simuler l'obtention des offres disponibles pour le panier
-          // Ici on suppose que les offres sont déjà dans un format récupéré depuis une API.
-          List<Offer> offers = [
-            Offer(type: 'percentage', value: 10),
-            Offer(type: 'minus', value: 15),
-            Offer(type: 'slice', sliceValue: 100, value: 12),
-          ];
+          return FutureBuilder(
+            future: cartCubit.fetchOffers(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError || !snapshot.hasData) {
+                return const Center(
+                  child: Text("Erreur lors du chargement des offres."),
+                );
+              }
 
-          // Calculer le meilleur prix avec les offres
-          double bestPrice = totalWithoutDiscount;
-          Offer bestOffer = offers[0];
+              final offers = snapshot.data!;
+              double bestPrice = totalPrice;
+              String bestOfferType = '';
 
-          for (var offer in offers) {
-            double priceAfterOffer = _applyOffer(totalWithoutDiscount, offer);
-            if (priceAfterOffer < bestPrice) {
-              bestPrice = priceAfterOffer;
-              bestOffer = offer;
-            }
-          }
+              for (final offer in offers) {
+                double calculatedPrice = totalPrice;
 
-          return Column(
-            children: [
-              Expanded(
-                child: ListView(
-                  children: cart.entries.map((entry) {
-                    final book = entry.key;
-                    final quantity = entry.value;
-                    final totalPriceForBook = book.price * quantity;
+                switch (offer.type) {
+                  case 'percentage':
+                    calculatedPrice = totalPrice - (totalPrice * (offer.value / 100));
+                    break;
+                  case 'minus':
+                    calculatedPrice = totalPrice - offer.value;
+                    break;
+                  case 'slice':
+                    if (offer.sliceValue != null) {
+                      calculatedPrice = totalPrice -
+                          (offer.value * (totalPrice / offer.sliceValue!).floor());
+                    }
+                    break;
+                }
 
-                    return ListTile(
-                      leading: Image.network(book.cover),
-                      title: Text(book.title),
-                      subtitle: Text(
-                        "Prix unitaire : ${book.price.toStringAsFixed(2)} €\nTotal : ${totalPriceForBook.toStringAsFixed(2)} €",
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Bouton pour retirer un livre
-                          IconButton(
-                            icon: const Icon(Icons.remove),
-                            onPressed: () {
-                              context.read<CartCubit>().removeFromCart(book);
-                            },
+                if (calculatedPrice < bestPrice) {
+                  bestPrice = calculatedPrice;
+                  bestOfferType = offer.type;
+                }
+              }
+
+              return Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: cart.length,
+                      itemBuilder: (context, index) {
+                        final book = cart.keys.elementAt(index);
+                        final quantity = cart[book]!;
+
+                        return ListTile(
+                          leading: Image.network(book.cover),
+                          title: Text(book.title),
+                          subtitle: Text(
+                            "${book.price.toStringAsFixed(2)} € x $quantity = ${(book.price * quantity).toStringAsFixed(2)} €",
                           ),
-                          Text(
-                            "$quantity",
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline),
+                                onPressed: () {
+                                  cartCubit.removeFromCart(book);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: () {
+                                  cartCubit.addToCart(book);
+                                },
+                              ),
+                            ],
                           ),
-                          // Bouton pour ajouter un livre
-                          IconButton(
-                            icon: const Icon(Icons.add),
-                            onPressed: () {
-                              context.read<CartCubit>().addToCart(book);
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Total sans réduction : ${totalWithoutDiscount.toStringAsFixed(2)} €",
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "Offres disponibles :",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    ...offers.map((offer) {
-                      double priceAfterOffer = _applyOffer(totalWithoutDiscount, offer);
-                      bool isBestOffer = priceAfterOffer == bestPrice;
-
-                      return Opacity(
-                        opacity: isBestOffer ? 1.0 : 0.5,
-                        child: ListTile(
-                          title: Text(
-                            _offerDescription(offer),
-                            style: TextStyle(
-                              fontWeight: isBestOffer
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                          trailing: Text(
-                            "${priceAfterOffer.toStringAsFixed(2)} €",
-                            style: TextStyle(
-                              fontWeight: isBestOffer
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Vos offres personnalisées :",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Prix total après réduction : ${bestPrice.toStringAsFixed(2)} €",
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        const SizedBox(height: 8),
+                        Column(
+                          children: offers.map((offer) {
+                            double calculatedPrice = totalPrice;
+
+                            switch (offer.type) {
+                              case 'percentage':
+                                calculatedPrice = totalPrice - (totalPrice * (offer.value / 100));
+                                break;
+                              case 'minus':
+                                calculatedPrice = totalPrice - offer.value;
+                                break;
+                              case 'slice':
+                                if (offer.sliceValue != null) {
+                                  calculatedPrice = totalPrice -
+                                      (offer.value * (totalPrice / offer.sliceValue!).floor());
+                                }
+                                break;
+                            }
+
+                            return Opacity(
+                              opacity: bestOfferType == offer.type ? 1.0 : 0.5,
+                              child: ListTile(
+                                title: Text("Offre ${offer.type}"),
+                                subtitle: Text(
+                                  "Prix avec cette offre : ${calculatedPrice.toStringAsFixed(2)} €",
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          "Total sans réduction : ${totalPrice.toStringAsFixed(2)} €",
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Total avec réduction : ${bestPrice.toStringAsFixed(2)} €",
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
     );
-  }
-
-  // Applique l'offre sur le prix total
-  double _applyOffer(double totalPrice, Offer offer) {
-    switch (offer.type) {
-      case 'percentage':
-        return totalPrice - (totalPrice * offer.value / 100);
-      case 'minus':
-        return totalPrice - offer.value;
-      case 'slice':
-      // Vérifier que sliceValue n'est pas null avant de l'utiliser
-        if (offer.sliceValue != null) {
-          return totalPrice - (offer.value * (totalPrice / offer.sliceValue!).floor());
-        }
-        return totalPrice; // Retourner le prix total sans modification si sliceValue est null
-      default:
-        return totalPrice;
-    }
-  }
-
-  // Décrire l'offre de manière lisible
-  String _offerDescription(Offer offer) {
-    switch (offer.type) {
-      case 'percentage':
-        return "Réduction de ${offer.value}%";
-      case 'minus':
-        return "Réduction de ${offer.value}€";
-      case 'slice':
-        return "Remise de ${offer.value}€ par tranche de ${offer.sliceValue}€";
-      default:
-        return "Offre inconnue";
-    }
   }
 }

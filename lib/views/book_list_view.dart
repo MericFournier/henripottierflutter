@@ -61,11 +61,10 @@ class BookListView extends StatelessWidget {
                       ],
                     ),
                     onTap: () {
-                      Navigator.push(
+                      Navigator.pushNamed(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => BookDetailsView(book: book),
-                        ),
+                        '/book_details',
+                        arguments: book,
                       );
                     },
                     trailing: IconButton(

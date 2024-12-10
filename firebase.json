@@ -1,0 +1,30 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "henri-pottier",
+          "appId": "1:1024197624577:android:05ea2b6996a0a64c37d100",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "henri-pottier",
+          "appId": "1:1024197624577:ios:ac9026561b49ce8c37d100",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "henri-pottier",
+          "configurations": {
+            "android": "1:1024197624577:android:05ea2b6996a0a64c37d100",
+            "ios": "1:1024197624577:ios:ac9026561b49ce8c37d100"
+          }
+        }
+      }
+    }
+  }
+}
