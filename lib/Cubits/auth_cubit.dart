@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-// États d'authentification
 abstract class AuthState {}
 
 class AuthInitial extends AuthState {}

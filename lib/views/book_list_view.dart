@@ -22,7 +22,6 @@ class BookListView extends StatelessWidget {
             Flexible(
               child: Row(
                 children: [
-                  // Utilisation de StreamBuilder pour écouter les changements d'état de l'utilisateur
                   StreamBuilder<User?>(
                     stream: FirebaseAuth.instance.authStateChanges(),
                     builder: (context, snapshot) {
@@ -43,7 +42,6 @@ class BookListView extends StatelessWidget {
                               const SnackBar(content: Text('Vous avez été déconnecté.')),
                             );
                           } else {
-                            // Si l'utilisateur n'est pas connecté, redirigez vers la page de connexion
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -67,13 +65,11 @@ class BookListView extends StatelessWidget {
             onPressed: () {
               final user = FirebaseAuth.instance.currentUser;
               if (user != null) {
-                // Si l'utilisateur est connecté, naviguer vers le panier
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const CartView()),
                 );
               } else {
-                // Si l'utilisateur n'est pas connecté, afficher un message
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Veuillez vous connecter pour accéder au panier.')),
                 );

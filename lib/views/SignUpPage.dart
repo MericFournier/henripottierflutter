@@ -14,10 +14,8 @@ class _SignUpPageState extends State<SignUpPage> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // Méthode pour appeler le Cubit et gérer l'inscription
   Future<void> _register(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
-      // Appel au Cubit pour effectuer l'inscription
       context.read<AuthCubit>().signUp(
         _emailController.text.trim(),
         _passwordController.text.trim(),

@@ -31,7 +31,7 @@ class CommentService {
           'id': doc.id,
           'content': doc['content'],
           'userId': doc['userId'],
-          'rating': doc['rating'],  // Récupération de la note
+          'rating': doc['rating'],
           'timestamp': doc['timestamp'],
         };
       }).toList();
