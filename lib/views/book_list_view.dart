@@ -42,6 +42,7 @@ class BookListView extends StatelessWidget {
                               const SnackBar(content: Text('Vous avez été déconnecté.')),
                             );
                           } else {
+                            // Si l'utilisateur n'est pas connecté, redirigez vers la page de connexion
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -65,11 +66,13 @@ class BookListView extends StatelessWidget {
             onPressed: () {
               final user = FirebaseAuth.instance.currentUser;
               if (user != null) {
+                // Si l'utilisateur est connecté, naviguer vers le panier
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const CartView()),
                 );
               } else {
+                // Si l'utilisateur n'est pas connecté, afficher un message
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Veuillez vous connecter pour accéder au panier.')),
                 );
@@ -118,22 +121,15 @@ class BookListView extends StatelessWidget {
                         arguments: book,
                       );
                     },
-                    trailing: IconButton(
+                    trailing: FirebaseAuth.instance.currentUser == null
+                        ? null // Aucun widget n'est affiché si l'utilisateur n'est pas connecté
+                        : IconButton(
                       icon: Icon(
                         Icons.add_shopping_cart,
                         color: isInCart ? Colors.green : Colors.grey,
                       ),
                       onPressed: () {
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user != null) {
-                          cartCubit.addToCart(book);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Veuillez vous connecter pour ajouter des livres au panier.')),
-                          );
-                        }
+                        cartCubit.addToCart(book);
                       },
                     ),
                   );
