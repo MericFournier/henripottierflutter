@@ -15,8 +15,6 @@ class OfferService {
       final offers = (data['offers'] as List)
           .map((json) => Offer.fromJson(json))
           .toList();
-      print("Offers = ");
-      print(data['offers'] as List);
       return offers;
     } else {
       throw Exception('Failed to load offers');

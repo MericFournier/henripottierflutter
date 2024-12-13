@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../Cubits/comment_cubit.dart';
 import '../Models/Book.dart';
-import '../firebase/firebase_comments.dart'; // Import du service CommentService
 
 class BookDetailsView extends StatefulWidget {
   final Book book;
+
   const BookDetailsView({super.key, required this.book});
 
   @override
@@ -14,89 +16,37 @@ class BookDetailsView extends StatefulWidget {
 
 class _BookDetailsViewState extends State<BookDetailsView> {
   final _commentController = TextEditingController();
-  int _rating = 1; // Initialisez la valeur du rating à 1
+  int _rating = 1;
   bool _isEditing = false;
   String? _currentReviewId;
 
-  final CommentService _commentService = CommentService(); // Instance du service CommentService
-
-  // Fonction pour ajouter ou modifier un avis
-  void _submitReview() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final String userName = user?.displayName ?? 'Anonyme'; // Si non connecté, afficher "Anonyme"
-
-    // Si l'utilisateur édite un avis existant
-    if (_isEditing && _currentReviewId != null) {
-      await _commentService.addReview(
-        widget.book.isbn, // Utilisez l'ISBN du livre pour identifier
-        user?.uid ?? '', // Utilisez l'UID de l'utilisateur
-        _commentController.text,
-        _rating.toDouble(), // Convertir l'entier en double
-      );
-    } else {
-      // Sinon, on ajoute un nouvel avis
-      await _commentService.addReview(
-        widget.book.isbn,
-        user?.uid ?? '',
-        _commentController.text,
-        _rating.toDouble(),
-      );
-    }
-
-    // Réinitialisation des champs après l'ajout/modification
-    _commentController.clear();
-    setState(() {
-      _isEditing = false;
-      _rating = 1; // Réinitialisation de la note
-    });
-
-    // Affichage d'un message de succès
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(_isEditing ? "Avis modifié avec succès !" : "Avis ajouté avec succès !"),
-    ));
-  }
-
-  // Fonction pour supprimer un avis
-  void _deleteReview(String reviewId) async {
-    await _commentService.deleteReview(reviewId);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text("Avis supprimé avec succès !"),
-    ));
-  }
-
-  // Fonction pour vérifier si l'utilisateur a déjà laissé un avis pour ce livre
-  Future<void> _checkExistingReview() async {
+  @override
+  void initState() {
+    super.initState();
     final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null) return;
+    if (user != null && user.email != null) {
+      // Charger les commentaires pour le livre
+      context.read<CommentCubit>().fetchComments(widget.book.isbn);
 
-    // Utilisation de la méthode getReviews pour récupérer les revues
-    final reviews = await _commentService.getReviews(widget.book.isbn);
-
-    // Vérifiez si l'utilisateur a déjà laissé un avis pour ce livre
-    final existingReview = reviews.firstWhere(
-          (review) => review['userId'] == user.uid,
-      orElse: () => {},
-    );
-
-    if (existingReview.isNotEmpty) {
-      setState(() {
-        _isEditing = true;
-        _currentReviewId = existingReview['id'];
-        _rating = existingReview['rating'].toInt();
-        _commentController.text = existingReview['content'];
+      // Vérifier si l'utilisateur a déjà commenté ce livre
+      context.read<CommentCubit>().fetchUserComment(widget.book.isbn, user.email!).then((existingComment) {
+        if (existingComment != null) {
+          setState(() {
+            _isEditing = true;
+            _currentReviewId = existingComment['id'];
+            _rating = existingComment['rating'].toInt();
+            _commentController.text = existingComment['comment'];
+          });
+        }
       });
     }
   }
 
   @override
-  void initState() {
-    super.initState();
-    _checkExistingReview();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.book.title)),
       body: SingleChildScrollView(
@@ -137,114 +87,125 @@ class _BookDetailsViewState extends State<BookDetailsView> {
               );
             }),
 
-            // Section des avis
+            // Section des avis des utilisateurs
             const SizedBox(height: 16),
             const Text(
               "Avis des utilisateurs",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('reviews')
-                  .where('bookIsbn', isEqualTo: widget.book.isbn)  // Filtrage par isbn
-                  .orderBy('timestamp', descending: true)
-                  .snapshots()
-                  .map((snapshot) => snapshot.docs.map((doc) {
-                return {
-                  'id': doc.id,
-                  'userName': doc['userName'],
-                  'rating': doc['rating'],
-                  'comment': doc['comment'],
-                  'timestamp': doc['timestamp'],
-                };
-              }).toList()),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator());
-                }
+            BlocBuilder<CommentCubit, List<Map<String, dynamic>>>(
+              builder: (context, comments) {
+                // Trouver le commentaire de l'utilisateur ou retourner null si non trouvé
+                final userComment = user != null
+                    ? comments.firstWhere(
+                      (c) => c['userEmail'] == user.email,
+                  orElse: () => <String, dynamic>{}, // Valeur par défaut valide
+                )
+                    : null;
 
-                final reviews = snapshot.data!;
+                final bool hasUserComment = userComment != null && userComment.isNotEmpty;
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: reviews.length,
-                  itemBuilder: (context, index) {
-                    final review = reviews[index];
-                    final reviewId = review['id'];
-                    final reviewUserName = review['userName'];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: comments.length,
+                      itemBuilder: (context, index) {
+                        final comment = comments[index];
+                        final isUserComment = user != null && comment['userEmail'] == user.email;
 
-                    return ListTile(
-                      title: Text('Note: ${review['rating']} étoiles'),
-                      subtitle: Text(review['comment']),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        return ListTile(
+                          title: Text('Note: ${comment['rating']} étoiles'),
+                          subtitle: Text(comment['comment']),
+                          trailing: isUserComment
+                              ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () {
+                                  setState(() {
+                                    _isEditing = true;
+                                    _currentReviewId = comment['id'];
+                                    _rating = comment['rating'].toInt();
+                                    _commentController.text = comment['comment'];
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  if (comment['id'] != null) {
+                                    await context.read<CommentCubit>().deleteComment(comment['id']);
+                                  }
+                                },
+                              ),
+                            ],
+                          )
+                              : null,
+                        );
+                      },
+                    ),
+
+                    // Formulaire d'ajout ou de modification d'avis
+                    if (!hasUserComment && !_isEditing)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(reviewUserName),
-                          if (reviewUserName != 'Anonyme') ...[
-                            IconButton(
-                              icon: Icon(Icons.edit),
-                              onPressed: () {
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Laisser un avis",
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: List.generate(5, (index) {
+                              return IconButton(
+                                icon: Icon(
+                                  index < _rating ? Icons.star : Icons.star_border,
+                                  color: index < _rating ? Colors.yellow : Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _rating = index + 1;
+                                  });
+                                },
+                              );
+                            }),
+                          ),
+                          TextField(
+                            controller: _commentController,
+                            decoration: const InputDecoration(labelText: 'Votre commentaire'),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: () async {
+                              if (user != null) {
+                                await context.read<CommentCubit>().addComment(
+                                  widget.book.isbn,
+                                  user.email!,
+                                  _commentController.text,
+                                  _rating,
+                                );
+                                _commentController.clear();
                                 setState(() {
-                                  _isEditing = true;
-                                  _currentReviewId = reviewId;
-                                  _rating = review['rating'];
-                                  _commentController.text = review['comment'];
+                                  _rating = 1;
                                 });
-                              },
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete),
-                              onPressed: () => _deleteReview(reviewId),
-                            ),
-                          ],
+                              }
+                            },
+                            child: const Text('Ajouter l\'avis'),
+                          ),
                         ],
                       ),
-                    );
-                  },
+                  ],
                 );
               },
             ),
 
-            // Formulaire d'ajout/modification d'avis
-            const SizedBox(height: 16),
-            Text(
-              _isEditing ? "Modifier votre avis" : "Laisser un avis",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
 
-            // Section pour les étoiles
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: List.generate(5, (index) {
-                return IconButton(
-                  icon: Icon(
-                    index < _rating
-                        ? Icons.star // Etoile pleine
-                        : Icons.star_border, // Etoile vide
-                    color: index < _rating ? Colors.yellow : Colors.grey,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _rating = index + 1; // Met à jour la note
-                    });
-                  },
-                );
-              }),
-            ),
-
-            // Champ pour le commentaire
-            const SizedBox(height: 16),
-            TextField(
-              controller: _commentController,
-              decoration: const InputDecoration(labelText: 'Votre commentaire'),
-              maxLines: 3,
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _submitReview,
-              child: Text(_isEditing ? 'Modifier l\'avis' : 'Ajouter l\'avis'),
-            ),
           ],
         ),
       ),

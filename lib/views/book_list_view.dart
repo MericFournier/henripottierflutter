@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -6,6 +7,7 @@ import '../Cubits/cart_cubit.dart';
 import '../Models/Book.dart';
 import 'book_details_view.dart';
 import 'cart_view.dart';
+import 'Login.dart';
 
 class BookListView extends StatelessWidget {
   const BookListView({super.key});
@@ -14,15 +16,69 @@ class BookListView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Liste des Livres"),
+        automaticallyImplyLeading: false,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Row(
+                children: [
+                  // Utilisation de StreamBuilder pour écouter les changements d'état de l'utilisateur
+                  StreamBuilder<User?>(
+                    stream: FirebaseAuth.instance.authStateChanges(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const CircularProgressIndicator();
+                      }
+
+                      final user = snapshot.data;
+
+                      return IconButton(
+                        icon: Icon(
+                          user != null ? Icons.exit_to_app : Icons.account_circle,
+                        ),
+                        onPressed: () {
+                          if (user != null) {
+                            FirebaseAuth.instance.signOut();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Vous avez été déconnecté.')),
+                            );
+                          } else {
+                            // Si l'utilisateur n'est pas connecté, redirigez vers la page de connexion
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LoginPage()),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  const Spacer(),
+                  const Text("Liste des Livres"),
+                  const Spacer(), // Spacer pour centrer le texte
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.shopping_cart),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CartView()),
-              );
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                // Si l'utilisateur est connecté, naviguer vers le panier
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CartView()),
+                );
+              } else {
+                // Si l'utilisateur n'est pas connecté, afficher un message
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Veuillez vous connecter pour accéder au panier.')),
+                );
+              }
             },
           ),
         ],
@@ -73,7 +129,16 @@ class BookListView extends StatelessWidget {
                         color: isInCart ? Colors.green : Colors.grey,
                       ),
                       onPressed: () {
-                        cartCubit.addToCart(book);
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          cartCubit.addToCart(book);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Veuillez vous connecter pour ajouter des livres au panier.')),
+                          );
+                        }
                       },
                     ),
                   );
