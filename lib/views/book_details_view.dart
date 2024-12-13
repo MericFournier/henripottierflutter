@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Models/Book.dart';
+import '../firebase/firebase_comments.dart'; // Import du service CommentService
 
 class BookDetailsView extends StatefulWidget {
   final Book book;
@@ -17,31 +18,32 @@ class _BookDetailsViewState extends State<BookDetailsView> {
   bool _isEditing = false;
   String? _currentReviewId;
 
+  final CommentService _commentService = CommentService(); // Instance du service CommentService
+
   // Fonction pour ajouter ou modifier un avis
   void _submitReview() async {
     final user = FirebaseAuth.instance.currentUser;
     final String userName = user?.displayName ?? 'Anonyme'; // Si non connecté, afficher "Anonyme"
 
-    final reviewData = {
-      'userName': userName, // Le nom de l'utilisateur, "Anonyme" s'il n'est pas connecté
-      'bookIsbn': widget.book.isbn,  // Utilisez isbn ici pour référencer le livre
-      'rating': _rating,
-      'comment': _commentController.text,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    // Si l'utilisateur édite un avis existant, on met à jour l'avis
+    // Si l'utilisateur édite un avis existant
     if (_isEditing && _currentReviewId != null) {
-      await FirebaseFirestore.instance
-          .collection('reviews')
-          .doc(_currentReviewId)
-          .update(reviewData);
+      await _commentService.addReview(
+        widget.book.isbn, // Utilisez l'ISBN du livre pour identifier
+        user?.uid ?? '', // Utilisez l'UID de l'utilisateur
+        _commentController.text,
+        _rating.toDouble(), // Convertir l'entier en double
+      );
     } else {
       // Sinon, on ajoute un nouvel avis
-      await FirebaseFirestore.instance.collection('reviews').add(reviewData);
+      await _commentService.addReview(
+        widget.book.isbn,
+        user?.uid ?? '',
+        _commentController.text,
+        _rating.toDouble(),
+      );
     }
 
-    // Remise à zéro après l'ajout/modification
+    // Réinitialisation des champs après l'ajout/modification
     _commentController.clear();
     setState(() {
       _isEditing = false;
@@ -56,8 +58,7 @@ class _BookDetailsViewState extends State<BookDetailsView> {
 
   // Fonction pour supprimer un avis
   void _deleteReview(String reviewId) async {
-    await FirebaseFirestore.instance.collection('reviews').doc(reviewId).delete();
-
+    await _commentService.deleteReview(reviewId);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text("Avis supprimé avec succès !"),
     ));
@@ -69,19 +70,21 @@ class _BookDetailsViewState extends State<BookDetailsView> {
 
     if (user == null) return;
 
-    final reviewSnapshot = await FirebaseFirestore.instance
-        .collection('reviews')
-        .where('userId', isEqualTo: user.uid)
-        .where('bookIsbn', isEqualTo: widget.book.isbn)  // Utilisez isbn ici pour filtrer par livre
-        .get();
+    // Utilisation de la méthode getReviews pour récupérer les revues
+    final reviews = await _commentService.getReviews(widget.book.isbn);
 
-    if (reviewSnapshot.docs.isNotEmpty) {
-      final review = reviewSnapshot.docs.first;
+    // Vérifiez si l'utilisateur a déjà laissé un avis pour ce livre
+    final existingReview = reviews.firstWhere(
+          (review) => review['userId'] == user.uid,
+      orElse: () => {},
+    );
+
+    if (existingReview.isNotEmpty) {
       setState(() {
         _isEditing = true;
-        _currentReviewId = review.id;
-        _rating = review['rating'];
-        _commentController.text = review['comment'];
+        _currentReviewId = existingReview['id'];
+        _rating = existingReview['rating'].toInt();
+        _commentController.text = existingReview['content'];
       });
     }
   }
@@ -140,26 +143,35 @@ class _BookDetailsViewState extends State<BookDetailsView> {
               "Avis des utilisateurs",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            StreamBuilder<QuerySnapshot>(
+            StreamBuilder<List<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('reviews')
                   .where('bookIsbn', isEqualTo: widget.book.isbn)  // Filtrage par isbn
                   .orderBy('timestamp', descending: true)
-                  .snapshots(),
+                  .snapshots()
+                  .map((snapshot) => snapshot.docs.map((doc) {
+                return {
+                  'id': doc.id,
+                  'userName': doc['userName'],
+                  'rating': doc['rating'],
+                  'comment': doc['comment'],
+                  'timestamp': doc['timestamp'],
+                };
+              }).toList()),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return Center(child: CircularProgressIndicator());
                 }
 
-                final reviews = snapshot.data!.docs;
+                final reviews = snapshot.data!;
 
                 return ListView.builder(
                   shrinkWrap: true,
                   itemCount: reviews.length,
                   itemBuilder: (context, index) {
                     final review = reviews[index];
-                    final reviewId = review.id;
-                    final reviewUserName = review['userName']; // Utilisation de 'userName' au lieu de 'userId'
+                    final reviewId = review['id'];
+                    final reviewUserName = review['userName'];
 
                     return ListTile(
                       title: Text('Note: ${review['rating']} étoiles'),
@@ -167,7 +179,7 @@ class _BookDetailsViewState extends State<BookDetailsView> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(reviewUserName), // Affichage du nom de l'utilisateur
+                          Text(reviewUserName),
                           if (reviewUserName != 'Anonyme') ...[
                             IconButton(
                               icon: Icon(Icons.edit),
