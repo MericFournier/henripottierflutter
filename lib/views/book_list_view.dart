@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../Cubits/books_cubit.dart';
 import '../Cubits/cart_cubit.dart';
 import '../Models/Book.dart';
-import 'book_details_view.dart';
 import 'cart_view.dart';
 import 'Login.dart';
 

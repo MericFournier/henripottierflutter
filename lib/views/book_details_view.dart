@@ -18,7 +18,6 @@ class _BookDetailsViewState extends State<BookDetailsView> {
   final _commentController = TextEditingController();
   int _rating = 1;
   bool _isEditing = false;
-  String? _currentReviewId;
 
   @override
   void initState() {

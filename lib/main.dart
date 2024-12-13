@@ -7,8 +7,6 @@ import 'package:henripottier/views/SignUpPage.dart';
 import 'package:henripottier/views/book_details_view.dart';
 import 'package:henripottier/views/book_list_view.dart';
 import 'package:henripottier/views/cart_view.dart';
-import 'package:henripottier/views/SignUpPage.dart';
-import 'package:henripottier/views/Login.dart';
 import 'Cubits/auth_cubit.dart';
 import 'Cubits/books_cubit.dart';
 import 'Cubits/cart_cubit.dart';
