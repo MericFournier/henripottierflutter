@@ -61,25 +61,63 @@ class BookListView extends StatelessWidget {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_cart),
-            onPressed: () {
-              final user = FirebaseAuth.instance.currentUser;
-              if (user != null) {
-                // Si l'utilisateur est connecté, naviguer vers le panier
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CartView()),
-                );
-              } else {
-                // Si l'utilisateur n'est pas connecté, afficher un message
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Veuillez vous connecter pour accéder au panier.')),
-                );
-              }
+          BlocBuilder<CartCubit, Map<Book, int>>(
+            builder: (context, cart) {
+              // Calculez le nombre total d'éléments dans le panier
+              final totalItems = cart.values.fold(0, (sum, quantity) => sum + quantity);
+
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.shopping_cart),
+                    onPressed: () {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user != null) {
+                        // Si l'utilisateur est connecté, naviguer vers le panier
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const CartView()),
+                        );
+                      } else {
+                        // Si l'utilisateur n'est pas connecté, afficher un message
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Veuillez vous connecter pour accéder au panier.')),
+                        );
+                      }
+                    },
+                  ),
+                  if (totalItems > 0) // Affichez la pastille seulement si totalItems > 0
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red, // Couleur de la pastille
+                          borderRadius: BorderRadius.circular(10), // Rond
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          '$totalItems',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
             },
           ),
         ],
+
       ),
       body: BlocBuilder<BooksCubit, List<Book>>(
         builder: (context, books) {
