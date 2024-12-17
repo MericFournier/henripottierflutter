@@ -102,7 +102,6 @@ class _BookDetailsViewState extends State<BookDetailsView> {
                 )
                     : null;
 
-                final bool hasUserComment = userComment != null && userComment.isNotEmpty;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
